@@ -897,14 +897,81 @@ int art_iter_prefix(art_tree *t, const unsigned char *key, int key_len, art_call
     return 0;
 }
 
+/*given the value, DFS search to get RANK*/
+int recursive_rank(art_node *n, int *data) {
+
+  int count = 0;
+
+  /*if NULL, return*/
+  if (!n) return 0;
+
+  /*if sees a leaf, count*/
+  if (IS_LEAF(n)) {
+      art_leaf *l = LEAF_RAW(n);   
+      count = 1;
+      printf("A leaf!\n");
+      //printf("Value: %d\n", (int) l->value);
+      //printf("Data: %d\n", (int) *data);
+
+      /*if sees the value, stop*/
+      if ((int) l->value == (int) *data)
+	printf("Finally found it! Here it is!\n");
+
+      return count;
+    }
+
+  /*if sees a node, search for its children*/
+    int idx, res;
+    switch (n->type) {
+        case NODE4:
+            for (int i=0; i < n->num_children; i++) {
+	      count += recursive_rank(((art_node4*)n)->children[i], data);
+	      //printf("Count: %d\n", count);
+            }
+            break;
+
+        case NODE16:
+            for (int i=0; i < n->num_children; i++) {
+	      count += recursive_rank(((art_node16*)n)->children[i], data);
+	      //printf("Count: %d\n", count);
+            }
+            break;
+
+        case NODE48:
+            for (int i=0; i < 256; i++) {
+                idx = ((art_node48*)n)->keys[i];
+                if (!idx) continue;
+                count += recursive_rank(((art_node48*)n)->children[idx-1], data);
+		//printf("Count: %d\n", count);
+            }
+            break;
+
+        case NODE256:
+            for (int i=0; i < 256; i++) {
+                if (!((art_node256*)n)->children[i]) continue;
+                count += recursive_rank(((art_node256*)n)->children[i], data);
+		//printf("Count: %d\n", count);
+            }
+            break;
+
+        default:
+            abort();
+    }
+    return count;
+}
+
+
+
 int main(){
     art_tree t;
     int res = art_tree_init(&t);
 
+    /*read data from file*/
     int len;
     char buf[512];
     FILE *f = fopen("words.txt", "r");
 
+    /*letters in each line are keys, line numbers are values*/
     uintptr_t line = 1;
     while (fgets(buf, sizeof buf, f)) {
         len = strlen(buf);
@@ -912,12 +979,22 @@ int main(){
 	art_insert(&t, (unsigned char*)buf, len, (void*)line);
         line++;
     }
-    
+
+    /*search for value and get rank*/
+    art_node *n = t.root;
+    int count = 0;
+    int data = 2;
+    int* p = &data;
+    count = recursive_rank(n, p);
+    printf("TotalCount: %d\n", count);
+
+    /*this is a test for giving a key and find its value*/
+    /*
     char needs_found[] = "Abanic";
     len = strlen(needs_found);
     uintptr_t val = (uintptr_t)art_search(&t, (unsigned char*)needs_found, len+1);
     printf("Val: %lu Str: %s\n len: %d\n", val, needs_found, len);
-
+    */
     res = art_tree_destroy(&t);
     
 }  
